@@ -360,7 +360,7 @@ export class MultiSigEscrowClient {
           ...operation,
           version: MULTISIG_SNAPSHOT_VERSION,
           signers: [...operation.signers],
-          collectedSignatures: operation.collectedSignatures.map((entry) => ({ ...entry })),
+          collectedSignatures: [...operation.collectedSignatures],
         }
       : undefined;
   }
@@ -395,27 +395,12 @@ export class MultiSigEscrowClient {
     // `version` is a snapshot-transport concern, not part of the operation's
     // own state — don't let it leak into the in-memory record.
     const { version: _version, ...operation } = snapshot;
-    const now = Date.now();
     this.operations.set(operation.operationId, {
       ...operation,
       signers: [...operation.signers],
-      collectedSignatures: operation.collectedSignatures.map((entry) => {
-        const isVerified = entry.verified === true;
-        return {
-          signerAddress: entry.signerAddress,
-          signedXdr: entry.signedXdr,
-          addedAt: entry.addedAt,
-          verified: isVerified,
-          ...(isVerified
-            ? {
-                verifiedAt:
-                  typeof entry.verifiedAt === 'number' && Number.isFinite(entry.verifiedAt)
-                    ? entry.verifiedAt
-                    : now,
-              }
-            : {}),
-        };
-      }),
+      collectedSignatures: operation.collectedSignatures.map((entry) =>
+        this._reverifyImportedEntry(entry, snapshot),
+      ),
     });
     return { ok: true, data: { operationId: operation.operationId } };
   }
@@ -424,7 +409,7 @@ export class MultiSigEscrowClient {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /** Validates the shape and cryptographic signatures of a snapshot before it's admitted into `this.operations`. */
+  /** Validates the shape of a snapshot before it's admitted into `this.operations`. */
   private _validateSnapshot(
     snapshot: MultiSigStateSnapshot,
   ): { ok: true } | { ok: false; error: string } {
@@ -479,80 +464,6 @@ export class MultiSigEscrowClient {
     const validStatuses: MultiSigOperationStatus[] = ['pending', 'ready', 'submitted', 'expired'];
     if (!validStatuses.includes(snapshot.status)) {
       return { ok: false, error: `snapshot.status must be one of: ${validStatuses.join(', ')}` };
-    }
-    if (snapshot.signers.length === 0) {
-      return { ok: false, error: 'snapshot.signers must contain at least one signer' };
-    }
-    for (const [index, signer] of snapshot.signers.entries()) {
-      if (typeof signer !== 'string' || !isValidStellarAddress(signer)) {
-        return {
-          ok: false,
-          error: `snapshot.signers[${index}] is not a valid Stellar address: ${String(signer)}`,
-        };
-      }
-    }
-    if (new Set(snapshot.signers).size !== snapshot.signers.length) {
-      return { ok: false, error: 'Duplicate signer addresses are not allowed in snapshot.signers' };
-    }
-    const seenSigners = new Set<string>();
-    for (const [index, entry] of snapshot.collectedSignatures.entries()) {
-      if (!entry || typeof entry !== 'object') {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}] must be an object`,
-        };
-      }
-      if (typeof entry.signerAddress !== 'string' || !entry.signerAddress) {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}].signerAddress must be a non-empty string`,
-        };
-      }
-      if (!snapshot.signers.includes(entry.signerAddress)) {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}].signerAddress (${entry.signerAddress}) is not an authorised signer for this operation`,
-        };
-      }
-      if (seenSigners.has(entry.signerAddress)) {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}] contains duplicate signature from ${entry.signerAddress}`,
-        };
-      }
-      seenSigners.add(entry.signerAddress);
-      if (typeof entry.signedXdr !== 'string' || !entry.signedXdr) {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}].signedXdr must be a non-empty string`,
-        };
-      }
-      if (typeof entry.addedAt !== 'number' || !Number.isFinite(entry.addedAt)) {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}].addedAt must be a finite number`,
-        };
-      }
-      if (entry.verified !== undefined && typeof entry.verified !== 'boolean') {
-        return {
-          ok: false,
-          error: `snapshot.collectedSignatures[${index}].verified must be a boolean`,
-        };
-      }
-      if (entry.verified === true) {
-        const verification = this._verifySignedXdr(
-          entry.signedXdr,
-          snapshot.unsignedXdr,
-          entry.signerAddress,
-          snapshot.networkPassphrase,
-        );
-        if (!verification.ok) {
-          return {
-            ok: false,
-            error: `snapshot.collectedSignatures[${index}] verification failed: ${verification.error}`,
-          };
-        }
-      }
     }
     return { ok: true };
   }
