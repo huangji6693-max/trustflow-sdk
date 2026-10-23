@@ -270,18 +270,17 @@ export function normalizeMilestoneExpiration(
   referenceDate?: Date,
 ): number;
 export function normalizeMilestoneExpiration<
-  T extends { deadline?: Date | number | string; expiration?: Date | number | string } = {
-    deadline?: Date | number | string;
-    expiration?: Date | number | string;
-  },
-  TInput extends Date | number | string | T[] = T[],
+  T extends { deadline?: Date | number | string; expiration?: Date | number | string },
+>(input: T[], referenceDate?: Date): Array<T & { deadline: number }>;
+export function normalizeMilestoneExpiration<
+  T extends { deadline?: Date | number | string; expiration?: Date | number | string },
 >(
-  input: TInput,
+  input: Date | number | string | T[],
   referenceDate?: Date,
-): TInput extends Array<infer U> ? Array<U & { deadline: number }> : number {
+): number | Array<T & { deadline: number }> {
   if (Array.isArray(input)) {
     let lastDeadline = -1;
-    const normalized = input.map((milestone, idx) => {
+    return input.map((milestone, idx) => {
       const field = `milestones[${idx}].deadline`;
       const val = milestone.deadline ?? milestone.expiration;
       if (val === undefined) {
@@ -303,11 +302,8 @@ export function normalizeMilestoneExpiration<
         deadline: seconds,
       };
     });
-    return normalized as TInput extends Array<infer U> ? Array<U & { deadline: number }> : number;
   }
 
   const seconds = normalizeToUtcSeconds(input as Date | number | string);
-  return validateFutureExpiration(seconds, 'expiration', {
-    referenceDate,
-  }) as TInput extends Array<infer U> ? Array<U & { deadline: number }> : number;
+  return validateFutureExpiration(seconds, 'expiration', { referenceDate });
 }
