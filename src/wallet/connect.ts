@@ -1,6 +1,7 @@
-import type { WalletAdapter, WalletConnection, WalletType } from './types';
-import { FreighterWalletAdapter } from './freighter';
-import { AlbedoWalletAdapter } from './albedo';
+import type { WalletConnection, WalletType } from './types';
+import { isWalletRejection } from './types';
+import { getFreighter } from './freighter';
+import { getAlbedo } from './albedo';
 import { TrustFlowError } from '../errors';
 
 /** Albedo names the public network `public` or `pubnet`; the SDK calls it `MAINNET`. */
@@ -26,26 +27,71 @@ export function normalizeWalletNetwork(network?: string | null): string {
 }
 
 /**
- * Creates a {@link WalletAdapter} instance for the specified Stellar wallet provider.
- */
-export function createWalletAdapter(type: WalletType = 'freighter'): WalletAdapter {
-  if (type === 'freighter') {
-    return new FreighterWalletAdapter();
-  }
-  if (type === 'albedo') {
-    return new AlbedoWalletAdapter();
-  }
-  throw new TrustFlowError(`Wallet type ${type} not supported`, 'UNAUTHORIZED');
-}
-
-/**
  * Attempts to establish a connection with the specified Stellar wallet.
  * If the user rejects the connection dialog, a retryable TrustFlowError with
  * code 'USER_REJECTED' is thrown, leaving the connection state clean for subsequent attempts.
  */
 export async function connectWallet(type: WalletType = 'freighter'): Promise<WalletConnection> {
-  const adapter = createWalletAdapter(type);
-  return adapter.connect();
+  if (type === 'freighter') {
+    const freighter = getFreighter();
+    if (!freighter) {
+      throw new TrustFlowError('Freighter not installed', 'UNAUTHORIZED');
+    }
+    try {
+      const publicKey = await freighter.getPublicKey();
+      if (!publicKey) {
+        throw TrustFlowError.userRejected('User rejected Freighter connection');
+      }
+      const network = await freighter.getNetwork();
+      return { type: 'freighter', publicKey, network: normalizeWalletNetwork(network) };
+    } catch (e: unknown) {
+      if (isWalletRejection(e)) {
+        throw TrustFlowError.userRejected(
+          e instanceof Error ? e.message : 'User rejected Freighter connection',
+          e,
+        );
+      }
+      if (e instanceof TrustFlowError) throw e;
+      throw TrustFlowError.wrap(e, 'UNAUTHORIZED');
+    }
+  }
+
+  if (type === 'albedo') {
+    const albedo = getAlbedo();
+    if (!albedo) {
+      throw new TrustFlowError('Albedo not available', 'UNAUTHORIZED');
+    }
+    try {
+      const res = await albedo.publicKey();
+      if (!res?.pubkey) {
+        throw TrustFlowError.userRejected('User rejected Albedo connection');
+      }
+      let rawNetwork: string | undefined = res.network;
+      if (rawNetwork === undefined && typeof albedo.getNetwork === 'function') {
+        try {
+          rawNetwork = await albedo.getNetwork();
+        } catch {
+          rawNetwork = undefined;
+        }
+      }
+      return {
+        type: 'albedo',
+        publicKey: res.pubkey,
+        network: normalizeWalletNetwork(rawNetwork),
+      };
+    } catch (e: unknown) {
+      if (isWalletRejection(e)) {
+        throw TrustFlowError.userRejected(
+          e instanceof Error ? e.message : 'User rejected Albedo connection',
+          e,
+        );
+      }
+      if (e instanceof TrustFlowError) throw e;
+      throw TrustFlowError.wrap(e, 'UNAUTHORIZED');
+    }
+  }
+
+  throw new TrustFlowError(`Wallet type ${type} not supported`, 'UNAUTHORIZED');
 }
 
 export async function disconnectWallet(): Promise<void> {

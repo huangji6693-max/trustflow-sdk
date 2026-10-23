@@ -48,9 +48,8 @@ Simulate user wallet connections and transaction signatures in headless unit/int
 import { MockWalletAdapter } from "@trustflow/sdk/testing";
 
 const wallet = new MockWalletAdapter("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
-const connection = await wallet.connect(); // { type: "freighter", publicKey: "G...", network: "TESTNET" }
-const signedXdr = await wallet.sign("AAAA-xdr...", connection.network);
-const signedMessage = await wallet.signMessage("challenge");
+const address = await wallet.connect();
+const signedXdr = await wallet.signTransaction("AAAA-xdr...");
 ```
 
 ## Fixture Builders

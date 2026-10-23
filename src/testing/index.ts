@@ -1,7 +1,7 @@
 import { xdr, nativeToScVal, scValToNative, SorobanDataBuilder } from '@stellar/stellar-sdk';
 
 import type { Escrow, EscrowState, EscrowStatus } from '../types/index';
-import type { WalletAdapter, WalletConnection, WalletType } from '../wallet/types';
+import type { WalletAdapter } from '../wallet/types';
 
 /**
  * Validates whether a value is a structurally valid Stellar `ScVal` (round-trips through XDR).
@@ -473,25 +473,18 @@ export function createMockSorobanServer(options: MockSorobanServerOptions = {}):
 }
 
 /**
- * Mock wallet adapter simulating browser wallet extensions (Freighter, Albedo)
- * and implementing the SDK {@link WalletAdapter} contract.
+ * Mock wallet adapter simulating browser wallet extensions (Freighter, Albedo).
  */
 export interface MockWalletAdapterOptions {
-  type?: WalletType;
   publicKey?: string;
-  network?: string;
-  available?: boolean;
   connected?: boolean;
   rejectNextError?: Error | string | null;
   shouldReject?: boolean;
 }
 
-export class MockWalletAdapter implements WalletAdapter {
-  type: WalletType = 'freighter';
+export class MockWalletAdapter {
   publicKey: string;
-  network: string = 'TESTNET';
   connected: boolean = true;
-  private availableOverride?: boolean;
   private nextRejection: Error | null = null;
 
   constructor(
@@ -502,11 +495,8 @@ export class MockWalletAdapter implements WalletAdapter {
     if (typeof optionsOrKey === 'string') {
       this.publicKey = optionsOrKey;
     } else {
-      this.type = optionsOrKey.type ?? 'freighter';
       this.publicKey =
         optionsOrKey.publicKey ?? 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
-      this.network = optionsOrKey.network ?? 'TESTNET';
-      this.availableOverride = optionsOrKey.available;
       this.connected = optionsOrKey.connected ?? true;
       if (optionsOrKey.rejectNextError) {
         this.rejectNext(optionsOrKey.rejectNextError);
@@ -517,7 +507,7 @@ export class MockWalletAdapter implements WalletAdapter {
   }
 
   /**
-   * Configures the next method call (connect, sign, signTransaction, signMessage, signAuthEntry) to reject with an error (Issue #478).
+   * Configures the next method call (connect, signTransaction, signAuthEntry) to reject with an error (Issue #478).
    */
   rejectNext(error: Error | string = new Error('User declined transaction')): this {
     this.nextRejection = typeof error === 'string' ? new Error(error) : error;
@@ -532,10 +522,6 @@ export class MockWalletAdapter implements WalletAdapter {
     }
   }
 
-  async isAvailable(): Promise<boolean> {
-    return this.availableOverride ?? this.connected;
-  }
-
   async isConnected(): Promise<boolean> {
     return this.connected;
   }
@@ -545,32 +531,19 @@ export class MockWalletAdapter implements WalletAdapter {
     return this.publicKey;
   }
 
-  async connect(): Promise<WalletConnection> {
+  async connect(): Promise<string> {
     this.checkRejection();
     this.connected = true;
-    return {
-      type: this.type,
-      publicKey: this.publicKey,
-      network: this.network,
-    };
+    return this.publicKey;
   }
 
   async disconnect(): Promise<void> {
     this.connected = false;
   }
 
-  async sign(xdr: string, _network: string = this.network): Promise<string> {
-    return this.signTransaction(xdr);
-  }
-
   async signTransaction(xdrString: string): Promise<string> {
     this.checkRejection();
     return xdrString;
-  }
-
-  async signMessage(message: string): Promise<string> {
-    this.checkRejection();
-    return `mock_sig_${message}`;
   }
 
   async signAuthEntry(entryXdr: string): Promise<string> {
@@ -591,8 +564,8 @@ export class MockWalletAdapter implements WalletAdapter {
         const signed = await this.signTransaction(xdr);
         return { signedXDR: signed };
       },
-      getNetwork: async () => this.network,
-      signMessage: async (message: string) => this.signMessage(message),
+      getNetwork: async () => 'TESTNET',
+      signMessage: async (message: string) => `mock_sig_${message}`,
     };
   }
 

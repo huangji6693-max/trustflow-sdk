@@ -419,9 +419,11 @@ const uri = generateSep7Uri(preparedXdr, {
 - `getAlbedo()` — Gets the Albedo wallet adapter
   - Returns the Albedo instance (does not throw if unavailable; returns null or throws on actual use)
 
-- `createWalletAdapter(walletType?)` — Creates a `WalletAdapter` instance for `'freighter'` (default) or `'albedo'`
-- `FreighterWalletAdapter` — Concrete `WalletAdapter` implementation backed by Freighter
-- `AlbedoWalletAdapter` — Concrete `WalletAdapter` implementation backed by Albedo
+- `signWithAlbedo(transaction, network, options?)` — Signs a `Transaction` or `FeeBumpTransaction` with Albedo and verifies the response
+  - Returns `Promise<{ xdr, hash }>`; the `xdr` can be submitted to Horizon as-is
+  - Throws `UNAUTHORIZED` when Albedo is not installed, `USER_REJECTED` when the user declines, and `SIGNING_ERROR` for an unsupported network or an envelope that does not verify
+
+- `isWalletRejection(error: unknown)` — Returns whether an unknown error matches common wallet-rejection signals, including provider error codes and user-declined or denied messages. Useful when handling custom `WalletAdapter` implementations; import it from `@trustflow/sdk/wallet`.
 
 ### Types
 
@@ -434,16 +436,17 @@ const uri = generateSep7Uri(preparedXdr, {
     network: string;         // The network name (e.g., 'TESTNET', 'PUBLIC')
   }
   ```
-  Note: This object contains connection state only. To sign, obtain a `WalletAdapter` via `createWalletAdapter()` or the low-level provider from `getFreighter()`.
+  Note: This object contains connection state only. To sign, obtain the wallet adapter directly from `getFreighter()` or similar.
   
-- `WalletAdapter` — Uniform interface implemented by `FreighterWalletAdapter`, `AlbedoWalletAdapter`, and `MockWalletAdapter`:
+- `WalletAdapter` — Uniform interface for wallet providers (#435). Not returned by `connectWallet`;
+  obtain a concrete adapter from `createFreighterAdapter()`:
   ```typescript
   interface WalletAdapter {
     type: WalletType;
     isAvailable(): Promise<boolean>;
     connect(): Promise<WalletConnection>;
     sign(xdr: string, network: string): Promise<string>;  // Sign an XDR transaction
-    signMessage(message: string): Promise<string>;        // Sign an arbitrary UTF-8 message
+    signMessage(message: string): Promise<string>;        // Sign a UTF-8 message, base64 signature
     disconnect(): Promise<void>;
   }
   ```
