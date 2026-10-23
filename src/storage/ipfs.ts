@@ -120,15 +120,6 @@ export interface EncryptedData {
   tag: string;
 }
 
-function normalizeGatewayUrl(gateway: string): string {
-  const cleanGateway = gateway.replace(/\/+$/, '');
-  return /\/ipfs(?:\/|$)/.test(cleanGateway) ? cleanGateway : `${cleanGateway}/ipfs`;
-}
-
-function buildGatewayCidUrl(gateway: string, cid: string): string {
-  return `${normalizeGatewayUrl(gateway)}/${cid}`;
-}
-
 /**
  * IPFS storage helper — uploads files and resolves JSON metadata with automatic gateway fallback.
  */
@@ -200,7 +191,7 @@ export class IPFSStorage {
         return { ok: false, error: 'Upload succeeded but response did not include a valid CID' };
       }
       logger.info('IPFS upload succeeded', { cid });
-      return { ok: true, data: { cid, url: buildGatewayCidUrl(this.gatewayUrl, cid) } };
+      return { ok: true, data: { cid, url: gatewayCidUrl(this.gatewayUrl, cid) } };
     } catch (err) {
       logger.error('IPFS upload failed', { error: toApiErrorMessage(err) });
       return { ok: false, error: toApiErrorMessage(err) };
@@ -229,7 +220,7 @@ export class IPFSStorage {
 
     for (const gateway of this.gateways) {
       const cleanGateway = gateway.replace(/\/+$/, '');
-      const url = buildGatewayCidUrl(cleanGateway, cid);
+      const url = gatewayCidUrl(gateway, cid);
       try {
         logger.debug('Resolving IPFS CID from gateway', { gateway: cleanGateway, cid });
         const response = await axios.get(url, {
