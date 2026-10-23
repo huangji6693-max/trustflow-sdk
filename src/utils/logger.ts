@@ -18,30 +18,8 @@ function shouldLog(level: LogLevel, minLevel: LogLevel): boolean {
 }
 
 /** Redact sensitive fields from log context */
-function redactContext(
-  context: unknown,
-  seen: WeakSet<object> = new WeakSet(),
-  redactPrimitives = false,
-): unknown {
-  if (!context || typeof context !== 'object') {
-    return redactPrimitives ? '[REDACTED]' : context;
-  }
-  if (seen.has(context)) {
-    return '[Circular]';
-  }
-  seen.add(context);
-
-  if (Array.isArray(context)) {
-    const redactedArray = context.map((item) =>
-      item && typeof item === 'object'
-        ? redactContext(item, seen, Array.isArray(item) ? redactPrimitives : false)
-        : redactPrimitives
-          ? '[REDACTED]'
-          : item,
-    );
-    seen.delete(context);
-    return redactedArray;
-  }
+function redactContext(context: unknown): unknown {
+  if (!context || typeof context !== 'object') return context;
 
   const sensitiveKeys = [
     'authorization',
@@ -57,21 +35,17 @@ function redactContext(
 
   for (const [key, value] of Object.entries(context as Record<string, unknown>)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = sensitiveKeys.some((k) => lowerKey.includes(k));
-    if (Array.isArray(value)) {
-      result[key] = redactContext(value, seen, isSensitive);
-    } else if (isSensitive) {
+    if (sensitiveKeys.some((k) => lowerKey.includes(k))) {
       result[key] = '[REDACTED]';
     } else if (Array.isArray(value)) {
       // Preserve arrays by mapping each element through redactContext
       result[key] = value.map((item) => redactContext(item));
     } else if (value && typeof value === 'object') {
-      result[key] = redactContext(value, seen, false);
+      result[key] = redactContext(value);
     } else {
       result[key] = value;
     }
   }
-  seen.delete(context);
   return result;
 }
 
