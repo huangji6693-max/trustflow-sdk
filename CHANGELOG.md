@@ -7,10 +7,13 @@
 - Issue #562: `isValidCID`, `isValidCIDv0`, `isValidCIDv1`, `assertValidCID` and `getCIDVersion` in `src/utils/validation.ts` now delegate to the decode-based validator in `src/storage/cid.ts`, so `isValidCid`/`isValidCID` always agree. Previously the regex versions rejected valid CIDv1 strings with multicodecs other than dag-pb, dag-cbor, raw and dag-json.
 - Removed the misleading `CID_V1_RE` and `CID_RE` regex exports. `CID_V0_RE` remains as a deprecated alias of `CID_V0_REGEX`.
 
-### Duplicate error code cleanup (#432)
+### Wallet rejection helper export (#567)
 
-- Issue #432: Removed the duplicate `INVALID_CONTRACT_CALL` member from `TrustFlowErrorCode` and enabled `@typescript-eslint/no-duplicate-type-constituents` in the default ESLint config.
-- Repaired pre-existing WebAuthn, IPFS, and fee-bump type errors so the required `npm run typecheck` and `npm run lint` checks pass.
+- Issue #567: Exported `isWalletRejection` from `@trustflow/sdk/wallet`, allowing custom wallet adapters to reuse the SDK's existing rejection-classification logic.
+
+### Session revocation on wallet disconnect (#347)
+
+- Issue #449: Clear cached balances in `TrustFlowClient.switchNetwork` so cached entries do not leak across networks.
 
 ### MultiSigConfig integration (#442)
 

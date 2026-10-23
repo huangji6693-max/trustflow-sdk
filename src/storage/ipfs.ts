@@ -7,7 +7,46 @@ import { createApiHttpClient, toApiErrorMessage } from '../utils/http';
 import type { ApiRetryConfig } from '../utils/http';
 import type { HttpInterceptors } from '../utils/interceptors';
 import { TrustFlowError } from '../errors';
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { randomBytes } from '../utils/crypto';
+
+/**
+ * Lazily resolves Node's `crypto` module so browser bundles never see a
+ * static `import ... from 'crypto'` (which forces Webpack 5 users into
+ * polyfills — enforced by tests/bundler-compat.test.ts). Only the pieces
+ * this module needs are typed, structurally, to avoid importing any
+ * `crypto` types (type-only imports are still static imports to bundlers).
+ */
+function requireNodeCrypto(): {
+  createCipheriv(
+    alg: string,
+    key: Uint8Array,
+    iv: Uint8Array,
+  ): {
+    update(data: Uint8Array): Buffer;
+    final(): Buffer;
+    getAuthTag(): Buffer;
+  };
+  createDecipheriv(
+    alg: string,
+    key: Uint8Array,
+    iv: Uint8Array,
+  ): {
+    update(data: Uint8Array): Buffer;
+    final(): Buffer;
+    setAuthTag(tag: Uint8Array): void;
+  };
+} {
+  const modName = 'crypto';
+  const req = typeof require !== 'undefined' ? require : undefined;
+  const nodeCrypto = req ? req(modName) : undefined;
+  if (!nodeCrypto) {
+    throw new TrustFlowError(
+      'AES-256-GCM encryption/decryption requires the Node.js crypto module, which is not available in this environment',
+      'UNSUPPORTED_ENVIRONMENT',
+    );
+  }
+  return nodeCrypto;
+}
 
 /** Default upload endpoint — a raw-body IPFS upload API (e.g. web3.storage-compatible). */
 const DEFAULT_IPFS_API_URL = 'https://api.web3.storage/upload';
@@ -290,7 +329,7 @@ export class IPFSStorage {
         tag: tag.toString('base64'),
       };
     } catch (e) {
-      throw TrustFlowError.wrap(e, 'STORAGE_GATEWAY_ERROR');
+      throw TrustFlowError.wrap(e, 'ENCRYPTION_ERROR');
     }
   }
 
@@ -316,7 +355,7 @@ export class IPFSStorage {
       decipher.setAuthTag(tag);
       return Buffer.concat([decipher.update(data), decipher.final()]);
     } catch (e) {
-      throw TrustFlowError.wrap(e, 'STORAGE_GATEWAY_ERROR');
+      throw TrustFlowError.wrap(e, 'DECRYPTION_ERROR');
     }
   }
 }
