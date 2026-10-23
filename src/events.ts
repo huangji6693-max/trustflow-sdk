@@ -18,10 +18,6 @@ const KNOWN_EVENT_TYPES: Set<string> = new Set([
   'dispute_resolved',
 ]);
 
-function isTrustFlowEventType(value: string): value is TrustFlowEventType {
-  return KNOWN_EVENT_TYPES.has(value);
-}
-
 export interface RawContractEvent {
   type: string;
   ledger: number;
@@ -68,18 +64,11 @@ export interface ParsedEvent<
   data: TData;
 }
 
-type ParsedEventDataByType = {
-  escrow_created: EscrowCreatedData;
-  escrow_released: EscrowReleasedData;
-  dispute_raised: DisputeRaisedData;
-};
-
-export type ParsedTrustFlowEvent = {
-  [T in TrustFlowEventType]: ParsedEvent<
-    T,
-    T extends keyof ParsedEventDataByType ? ParsedEventDataByType[T] : Record<string, unknown>
-  >;
-}[TrustFlowEventType];
+export type ParsedTrustFlowEvent =
+  | ParsedEvent<'escrow_created', EscrowCreatedData>
+  | ParsedEvent<'escrow_released', EscrowReleasedData>
+  | ParsedEvent<'dispute_raised', DisputeRaisedData>
+  | ParsedEvent<TrustFlowEventType, Record<string, unknown>>;
 
 export type ParsedEventForType<T extends TrustFlowEventType> =
   Extract<ParsedTrustFlowEvent, { type: T }> extends never
@@ -148,7 +137,7 @@ export function parseEvent(event: RawContractEvent): ParsedTrustFlowEvent | null
     const rawType = decodeScVal(event.topic[0]);
     const eventType = typeof rawType === 'string' ? rawType : String(rawType);
 
-    if (!isTrustFlowEventType(eventType)) {
+    if (!KNOWN_EVENT_TYPES.has(eventType)) {
       return null;
     }
 
@@ -159,13 +148,6 @@ export function parseEvent(event: RawContractEvent): ParsedTrustFlowEvent | null
       id: event.id,
       pagingToken: event.pagingToken,
     };
-    const decodeTopicData = (): Record<string, unknown> =>
-      Object.fromEntries(
-        event.topic.slice(1).map((topic, index) => [
-          `topic${index + 1}`,
-          String(decodeScVal(topic) ?? ''),
-        ]),
-      );
 
     switch (eventType) {
       case 'escrow_created': {
@@ -235,28 +217,8 @@ export function parseEvent(event: RawContractEvent): ParsedTrustFlowEvent | null
         };
       }
 
-      case 'escrow_funded':
-        return {
-          ...base,
-          type: 'escrow_funded',
-          data: decodeTopicData(),
-        };
-      case 'escrow_cancelled':
-        return {
-          ...base,
-          type: 'escrow_cancelled',
-          data: decodeTopicData(),
-        };
-      case 'dispute_resolved':
-        return {
-          ...base,
-          type: 'dispute_resolved',
-          data: decodeTopicData(),
-        };
-      default: {
-        const exhaustiveCheck: never = eventType;
-        return exhaustiveCheck;
-      }
+      default:
+        return { ...base, type: eventType as TrustFlowEventType, data: {} };
     }
   } catch (err) {
     logger.debug('Failed to parse contract event', { err, eventId: event.id });
