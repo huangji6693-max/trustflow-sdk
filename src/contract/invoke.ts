@@ -8,7 +8,6 @@ import { padResourceFee } from '../utils/resource-fee';
 import { describeError, logger } from '../utils/logger';
 import type { ReadContractStateOptions } from './read';
 import { simulateTransaction } from './simulation';
-import { DEFAULT_RESOURCE_FEE_MULTIPLIER, padResourceFee } from '../tx-pipeline/pipeline';
 
 export type SignAndSubmitFn = (xdr: string) => Promise<string>;
 
@@ -27,10 +26,11 @@ export interface InvokeContractOptions extends AccountOptions {
    */
   timeoutMs?: number;
   /**
-   * Safety headroom multiplier applied on top of the RPC-reported
-   * `minResourceFee` before `assembleTransaction`, matching
-   * {@link import('../tx-pipeline/types').PrepareOptions.resourceFeeMultiplier}.
-   * Defaults to {@link DEFAULT_RESOURCE_FEE_MULTIPLIER} (`1.1`, i.e. 10% headroom).
+   * Safety multiplier applied to the simulated `minResourceFee` before the
+   * transaction is assembled for signing, so a ledger-state change between
+   * simulation and submission does not fail with "insufficient resource fee"
+   * (#438). Defaults to `1.1`, matching `TransactionPipeline.prepare()`. Only
+   * affects the `signAndSubmit` path.
    */
   resourceFeeMultiplier?: number;
 }
@@ -132,22 +132,17 @@ export async function invokeContract(
       };
     }
 
-    const multiplier = options.resourceFeeMultiplier ?? DEFAULT_RESOURCE_FEE_MULTIPLIER;
-    const paddedFee = padResourceFee(simulation.minResourceFee ?? '0', multiplier);
-    if (
-      simulation.transactionData &&
-      typeof simulation.transactionData.setResourceFee === 'function'
-    ) {
-      simulation.transactionData.setResourceFee(paddedFee);
-    }
-
+    const paddedFee = padResourceFee(simulation.minResourceFee, options.resourceFeeMultiplier);
+    // Same ordering as TransactionPipeline.prepare(): the padded fee must land
+    // in the Soroban data itself, not only in the `minResourceFee` argument.
+    simulation.transactionData?.setResourceFee(paddedFee);
+    // Assemble from the full parsed response so the simulated authorization
+    // entries (`result.auth`) are carried into the built operation (#433).
     const prepared = rpc
       .assembleTransaction(tx, {
-        transactionData: simulation.transactionData ?? '',
-        events: [],
+        ...simulation.response,
         minResourceFee: paddedFee,
-        result: { retval: simulation.returnValue as any },
-      } as any)
+      } as rpc.Api.SimulateTransactionSuccessResponse)
       .build();
     const xdr = prepared.toXDR();
     logger.debug('Signing and submitting transaction', { method, xdrLength: xdr.length });
