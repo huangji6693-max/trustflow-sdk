@@ -107,4 +107,71 @@ describe('useTransaction', () => {
     expect(result.current.execute).toBe(execute);
     expect(result.current.reset).toBe(reset);
   });
+
+  it('ignores a superseded call that settles after a newer call', async () => {
+    const resolvers: Record<string, (h: string) => void> = {};
+    const rejecters: Record<string, (e: Error) => void> = {};
+    const { result } = renderHook(() => useTransaction());
+
+    let first: Promise<string> | undefined;
+    let second: Promise<string> | undefined;
+    act(() => {
+      first = result.current.execute(
+        () => new Promise<string>((res, rej) => {
+          resolvers.a = res;
+          rejecters.a = rej;
+        }),
+      );
+      second = result.current.execute(
+        () => new Promise<string>((res) => {
+          resolvers.b = res;
+        }),
+      );
+    });
+    first?.catch(() => undefined);
+
+    await act(async () => {
+      resolvers.b('second-hash');
+      await second;
+    });
+    expect(result.current.status).toBe('success');
+    expect(result.current.hash).toBe('second-hash');
+
+    await act(async () => {
+      rejecters.a(new Error('first failed'));
+      await expect(first).rejects.toThrow('first failed');
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(result.current.hash).toBe('second-hash');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('clears the previous hash while a new execution is pending', async () => {
+    const { result } = renderHook(() => useTransaction());
+
+    await act(async () => {
+      await result.current.execute(() => Promise.resolve('old-hash'));
+    });
+    expect(result.current.hash).toBe('old-hash');
+
+    let resolveFn: (h: string) => void = () => undefined;
+    let pending: Promise<string> | undefined;
+    act(() => {
+      pending = result.current.execute(
+        () => new Promise<string>((res) => {
+          resolveFn = res;
+        }),
+      );
+    });
+
+    expect(result.current.status).toBe('pending');
+    expect(result.current.hash).toBeUndefined();
+
+    await act(async () => {
+      resolveFn('new-hash');
+      await pending;
+    });
+    expect(result.current.hash).toBe('new-hash');
+  });
 });
