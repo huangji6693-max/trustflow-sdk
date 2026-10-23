@@ -41,9 +41,7 @@ export async function createEscrow(
     deadlineSeconds = validateFutureExpiration(deadlineInput, deadlineField);
   }
 
-  let normalizedMilestones:
-    | Array<NonNullable<CreateEscrowParams['milestones']>[number] & { deadline: number }>
-    | undefined;
+  let normalizedMilestones: any[] | undefined;
   if (params.milestones && Array.isArray(params.milestones)) {
     normalizedMilestones = normalizeMilestoneExpiration(params.milestones);
   }
