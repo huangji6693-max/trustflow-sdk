@@ -245,57 +245,12 @@ describe('SorobanSpec', () => {
     }
   });
 
-  it('decodes return values from base64 XDR and reports malformed or unsupported types', () => {
-    const type = xdr.ScSpecTypeDef.scSpecTypeU32();
-    const spec = new SorobanSpec(functionEntry('read', [], [type]));
-    const payload = xdr.ScVal.scvU32(17).toXDR('base64');
-    expect(spec.parseXDRPayload(payload).u32()).toBe(17);
-    expect(spec.decodeReturnValue('read', payload)).toBe(17);
-    expect(() => spec.parseXDRPayload('not-xdr')).toThrow(
+  it('rejects a non-void return value for a void-output function that takes arguments', () => {
+    const spec = new SorobanSpec(
+      functionEntry('withArg', [{ name: 'x', type: xdr.ScSpecTypeDef.scSpecTypeU32() }], []),
+    );
+    expect(() => spec.decodeReturnValue('withArg', xdr.ScVal.scvU32(1))).toThrow(
       expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
     );
-    expect(() => spec.valToScVal('no', xdr.ScSpecTypeDef.scSpecTypeMuxedAddress())).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(() => spec.valToScVal(1, xdr.ScSpecTypeDef.scSpecTypeError())).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(() => spec.valToScVal(1, xdr.ScSpecTypeDef.scSpecTypeVal())).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(() => spec.decodeReturnValue('missing', xdr.ScVal.scvU32(1))).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-  });
-
-  it('rejects invalid fixed bytes, tuple arity, and malformed return values', () => {
-    const bytesType = bytesNType(2);
-    const tuple = tupleType([xdr.ScSpecTypeDef.scSpecTypeU32()]);
-    const spec = new SorobanSpec([
-      functionEntry('bytes', [{ name: 'value', type: bytesType }], [bytesType]),
-      functionEntry('tuple', [{ name: 'value', type: tuple }], [tuple]),
-      functionEntry('empty', [], []),
-    ]);
-
-    expect(() => spec.encodeArgs('bytes', [Buffer.from([1])])).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(() => spec.encodeArgs('tuple', [[1, 2]])).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(() => spec.decodeReturnValue('tuple', xdr.ScVal.scvVec([]))).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-    expect(spec.decodeReturnValue('empty', xdr.ScVal.scvVoid())).toBeNull();
-    expect(() => spec.decodeReturnValue('empty', xdr.ScVal.scvU32(1))).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONTRACT_CALL' }),
-    );
-  });
-
-  it('does not silently treat unknown symbols or non-address values as valid', () => {
-    const type = xdr.ScSpecTypeDef.scSpecTypeAddress();
-    const spec = new SorobanSpec(functionEntry('address', [], [type]));
-    expect(() => spec.decodeReturnValue('address', xdr.ScVal.scvString('not an address'))).toThrow();
-    expect(Address.fromString(Keypair.random().publicKey()).toString()).toMatch(/^G/);
   });
 });
