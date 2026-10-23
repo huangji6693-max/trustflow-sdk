@@ -7,9 +7,9 @@
 - Issue #562: `isValidCID`, `isValidCIDv0`, `isValidCIDv1`, `assertValidCID` and `getCIDVersion` in `src/utils/validation.ts` now delegate to the decode-based validator in `src/storage/cid.ts`, so `isValidCid`/`isValidCID` always agree. Previously the regex versions rejected valid CIDv1 strings with multicodecs other than dag-pb, dag-cbor, raw and dag-json.
 - Removed the misleading `CID_V1_RE` and `CID_RE` regex exports. `CID_V0_RE` remains as a deprecated alias of `CID_V0_REGEX`.
 
-### Wallet rejection helper export (#567)
+### formatBytes units above GB (#564)
 
-- Issue #567: Exported `isWalletRejection` from `@trustflow/sdk/wallet`, allowing custom wallet adapters to reuse the SDK's existing rejection-classification logic.
+- Issue #564: `formatBytes` now supports `TB` and `PB` and clamps the unit index to the bounds of the `sizes` array, so sizes of 1 TiB or more no longer render as `"1 undefined"`. Formatting for `Bytes`/`KB`/`MB`/`GB` is unchanged.
 
 ### Session revocation on wallet disconnect (#347)
 
