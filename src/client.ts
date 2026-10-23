@@ -11,7 +11,6 @@ import {
 } from './constants';
 import { logger, SDKLogger } from './utils/logger';
 import { TrustFlowError } from './errors';
-import { ClientConfigSchema } from './schemas';
 import type { Network, ClientConfig, LoggingConfig } from './types';
 import { IPFSStorage } from './storage';
 import { SimpleCache } from './utils/cache';
@@ -190,19 +189,6 @@ export class TrustFlowClient {
     this._networkPassphrase = config.networkPassphrase ?? NETWORK_PASSPHRASES[this.network];
     if (typeof this._networkPassphrase !== 'string' || !this._networkPassphrase.trim()) {
       throw new TrustFlowError('networkPassphrase must not be empty', 'INVALID_CONFIG');
-    }
-    const schemaCheck = ClientConfigSchema.omit({ contractId: true, accounts: true }).safeParse(
-      config,
-    );
-    if (!schemaCheck.success) {
-      const firstIssue = schemaCheck.error.issues[0];
-      throw new TrustFlowError(
-        firstIssue?.message ?? 'Invalid client configuration',
-        'INVALID_CONFIG',
-        undefined,
-        firstIssue?.path.join('.'),
-        schemaCheck.error.issues,
-      );
     }
     this.apiBaseUrl = config.apiBaseUrl;
     this.apiKey = config.apiKey;
