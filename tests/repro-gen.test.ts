@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { xdr } from '@stellar/stellar-sdk';
 import { generateTypeScriptBindings } from '../src/contract/bindings';
 
@@ -50,20 +48,33 @@ function fnEntry(
   );
 }
 
-it('repro: generate code for a struct + two functions', () => {
-  const specEntries = [
-    structEntry('Config', [
-      { name: 'base_fee', type: t.i128() },
-      { name: 'weights', type: t.map(t.string(), t.u32()) },
-      { name: 'stages', type: t.vec(t.u32()) },
-    ]),
-    fnEntry('configure', [{ name: 'config', type: t.udt('Config') }], [t.bool()]),
-    fnEntry('batch', [{ name: 'pair', type: t.tuple([t.u32(), t.string()]) }], [t.u32()]),
-  ];
+describe('generateTypeScriptBindings - struct and function codegen', () => {
+  it('generates interface and client methods for a struct and two functions', () => {
+    const specEntries = [
+      structEntry('Config', [
+        { name: 'base_fee', type: t.i128() },
+        { name: 'weights', type: t.map(t.string(), t.u32()) },
+        { name: 'stages', type: t.vec(t.u32()) },
+      ]),
+      fnEntry('configure', [{ name: 'config', type: t.udt('Config') }], [t.bool()]),
+      fnEntry('batch', [{ name: 'pair', type: t.tuple([t.u32(), t.string()]) }], [t.u32()]),
+    ];
 
-  const code = generateTypeScriptBindings(specEntries, { className: 'Gen' });
-  const outDir = path.join(require("os").tmpdir(), "opencode");
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, "gen.ts"), code);
-  console.log(code);
+    const code = generateTypeScriptBindings(specEntries, { className: 'Gen' });
+
+    expect(code).toContain('export interface Config {');
+    expect(code).toContain('base_fee: bigint;');
+    expect(code).toContain('weights: Record<string, number>;');
+    expect(code).toContain('stages: number[];');
+    expect(code).toContain('export class Gen extends AbstractContractClient {');
+    expect(code).toContain('async configure(');
+    expect(code).toContain('args: { config: Config },');
+    expect(code).toContain('Promise<ContractCallResult & { result?: boolean }>');
+    expect(code).toContain('async readConfigure(args: { config: Config }): Promise<boolean>');
+    expect(code).toContain('async simulateConfigure(args: { config: Config }): Promise<SimulationResult>');
+    expect(code).toContain('async batch(');
+    expect(code).toContain('Promise<ContractCallResult & { result?: number }>');
+    expect(code).toContain('async readBatch(');
+    expect(code).toContain('async simulateBatch(');
+  });
 });
