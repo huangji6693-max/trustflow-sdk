@@ -9,7 +9,9 @@ describe('IPFSStorage.resolve - Issue #348', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getSpy = jest.spyOn(axios, 'get');
+    getSpy = jest.spyOn(axios, 'get').mockImplementation(() => {
+      throw new Error('Unexpected unmocked axios.get call');
+    });
   });
 
   afterEach(() => {
@@ -147,6 +149,17 @@ describe('IPFSStorage.resolve - Issue #348', () => {
         status: 200,
         headers: {},
         data: '',
+      })
+      .mockRejectedValueOnce(new Error('Gateway 1 down'))
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        data: '<html>Error</html>',
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        data: '',
       });
 
     const storage = new IPFSStorage({
@@ -167,6 +180,8 @@ describe('IPFSStorage.resolve - Issue #348', () => {
       expect(tfErr.code).toBe('STORAGE_GATEWAY_ERROR');
       expect(tfErr.message).toContain(cid);
     }
+
+    expect(getSpy).toHaveBeenCalledTimes(6);
   });
 
   it('rejects invalid CIDs before querying gateways', async () => {
