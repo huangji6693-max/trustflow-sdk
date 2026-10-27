@@ -612,7 +612,10 @@ export function createPlaywrightWalletScript(options: MockWalletAdapterOptions =
         return { signedXDR: xdr };
       },
       getNetwork: async () => 'TESTNET',
-      signMessage: async (msg) => 'mock_signature'
+      signMessage: async (msg) => {
+        if (${shouldReject}) throw new Error('User rejected request');
+        return \`mock_sig_\${msg}\`;
+      }
     };
   `;
 }
