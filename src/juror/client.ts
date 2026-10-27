@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { hash } from '@stellar/stellar-sdk';
 import type { ContractConfig } from '../types/contract';
 import type {
@@ -13,7 +14,9 @@ import type {
 export type { JurorClientOptions } from '../types/juror';
 import type { SDKResult } from '../types/index';
 
-import { buildVoteArgs } from '../contract/build';
+import { buildVoteArgs, buildRevealArgs } from '../contract/build';
+import { TrustFlowError } from '../errors';
+import { isValidEscrowId, isValidStellarAddress } from '../utils/validation';
 import { VoteSchema } from '../schemas';
 
 const VALID_CHOICES: VoteChoice[] = ['approve', 'reject', 'abstain'];
@@ -189,15 +192,19 @@ export class JurorClient {
       }
     }
 
-    if (
-      this.options.maxStoredSalts !== undefined &&
-      this.options.maxStoredSalts > 0 &&
-      this.storedSalts.size >= this.options.maxStoredSalts &&
-      !this.storedSalts.has(key)
-    ) {
-      const oldestKey = this.storedSalts.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.storedSalts.delete(oldestKey);
+    if (this.options.maxStoredSalts !== undefined) {
+      if (this.options.maxStoredSalts <= 0) {
+        this.storedSalts.clear();
+        return commitment;
+      }
+      if (
+        this.storedSalts.size >= this.options.maxStoredSalts &&
+        !this.storedSalts.has(key)
+      ) {
+        const oldestKey = this.storedSalts.keys().next().value;
+        if (oldestKey !== undefined) {
+          this.storedSalts.delete(oldestKey);
+        }
       }
     }
 

@@ -227,6 +227,15 @@ describe('commit-reveal voting helpers (Issue #373)', () => {
       expect(jurors.getStoredSalt(c3.commitmentHex)).toBeDefined();
     });
 
+    it("retains no salts when maxStoredSalts is 0 (Issue #638)", () => {
+      const jurors = new JurorClient(CONFIG, { maxStoredSalts: 0 });
+      const c1 = jurors.createVoteCommitment(true);
+      const c2 = jurors.createVoteCommitment(false);
+
+      expect(jurors.getStoredSalt(c1.commitmentHex)).toBeUndefined();
+      expect(jurors.getStoredSalt(c2.commitmentHex)).toBeUndefined();
+    });
+
     it('removes individual stored salt using removeStoredSalt', () => {
       const jurors = new JurorClient(CONFIG);
       const c1 = jurors.createVoteCommitment(true);
